@@ -79,10 +79,10 @@ class GraphPanel(ttk.Frame):
         # Legend
         legend = ttk.Frame(th)
         legend.pack(side="right")
-        tk.Label(legend, text="  acc ", bg="#00bc8c", fg="#ffffff",
-                 font=("Consolas", 8, "bold"), padx=3).pack(side="left", padx=2)
-        tk.Label(legend, text=" conflict ", bg="#e74c3c", fg="#ffffff",
-                 font=("Consolas", 8, "bold"), padx=3).pack(side="left", padx=2)
+        ttk.Label(legend, text=" accept ", bootstyle="success inverse",
+                  font=("Consolas", 8, "bold")).pack(side="left", padx=2)
+        ttk.Label(legend, text=" conflict ", bootstyle="danger inverse",
+                  font=("Consolas", 8, "bold")).pack(side="left", padx=2)
 
         self.table_frame = ttk.Frame(table_outer)
         self.table_frame.pack(fill="both", expand=True, padx=8, pady=(4, 8))

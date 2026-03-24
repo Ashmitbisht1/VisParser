@@ -171,11 +171,12 @@ class VisParserApp:
             return
 
         if self._has_conflicts:
-            messagebox.showwarning(
-                "Warning",
-                "The parsing table has conflicts. "
-                "Parsing may not work correctly."
+            messagebox.showerror(
+                "Invalid Grammar",
+                "Grammar is not valid for this parser type.\n"
+                "Conflicts detected. Parsing will not proceed."
             )
+            return
 
         self.output_panel.clear()
         self.output_panel.enable_parse_button(False)
