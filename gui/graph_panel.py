@@ -25,6 +25,7 @@ class GraphPanel(ttk.Frame):
         self._states = []           # list of frozenset[Item]
         self._grammar = None
         self._drag_data = None      # {"idx": int, "start_x": int, "start_y": int}
+        self._current_theme = "darkly"  # Track theme for highlight colors
 
         self._build_widgets()
 
@@ -394,6 +395,9 @@ class GraphPanel(ttk.Frame):
         sx.pack(side="bottom", fill="x")
         self.tree.pack(fill="both", expand=True)
 
+        # Set up cross-highlighting hover events
+        self._setup_table_hover_events()
+
         # Conflict banner
         if conflicts:
             conflict_text = "\n".join(conflicts)
@@ -415,3 +419,116 @@ class GraphPanel(ttk.Frame):
         self._grammar = None
         for widget in self.table_frame.winfo_children():
             widget.destroy()
+
+    # ================================================================== #
+    #  Cross-highlighting functionality                                   #
+    # ================================================================== #
+    def _setup_table_hover_events(self):
+        """Set up hover events for the parsing table."""
+        if self.tree:
+            # Bind motion events to treeview
+            self.tree.bind("<Motion>", self._on_table_hover)
+            self.tree.bind("<Leave>", self._on_table_leave)
+
+    def _on_table_hover(self, event):
+        """Handle hover over parsing table cells."""
+        # Get the item and column under the mouse
+        item = self.tree.identify_row(event.y)
+        column = self.tree.identify_column(event.x)
+        
+        if item and column:
+            # Get column index
+            col_idx = int(column[1:]) - 1  # Remove 'c' prefix and convert to 0-based
+            
+            # Get cell value
+            values = self.tree.item(item, 'values')
+            if col_idx < len(values):
+                cell_value = values[col_idx].strip()
+                self._highlight_from_cell_value(cell_value)
+
+    def _on_table_leave(self, event):
+        """Handle mouse leaving the parsing table."""
+        self._clear_highlights()
+
+    def _highlight_from_cell_value(self, cell_value):
+        """Highlight state/transition based on cell content."""
+        self._clear_highlights()
+        
+        if not cell_value:
+            return
+            
+        # Parse different types of cell values
+        if cell_value.startswith('s'):  # Shift action: s5 -> highlight state I5
+            try:
+                state_num = int(cell_value[1:])
+                self._highlight_state(state_num)
+            except ValueError:
+                pass
+        elif cell_value.startswith('r'):  # Reduce action: r3 -> highlight state I3
+            try:
+                state_num = int(cell_value[1:])
+                self._highlight_state(state_num)
+            except ValueError:
+                pass
+        elif cell_value.isdigit():  # Goto value: 3 -> highlight state I3
+            try:
+                state_num = int(cell_value)
+                self._highlight_state(state_num)
+            except ValueError:
+                pass
+        elif cell_value == 'acc':  # Accept action - highlight accepting state
+            # For accept, we might want to highlight the current state
+            # But we don't have that context here, so skip for now
+            pass
+
+    def _highlight_state(self, state_num):
+        """Highlight a specific state in the diagram."""
+        if state_num in self._positions:
+            cx, cy = self._positions[state_num]
+            cw, ch = self.CELL_W, self.CELL_H
+            x0 = cx - cw // 2
+            y0 = cy - ch // 2
+            x1 = cx + cw // 2
+            y1 = cy + ch // 2
+            
+            # Create highlight rectangle
+            self.canvas.create_rectangle(
+                x0 - 3, y0 - 3, x1 + 3, y1 + 3,
+                outline="#ffc107", width=3, tags=("highlight",),
+                dash=(5, 5)
+            )
+            
+            # Highlight state box outline
+            state_tag = f"state_{state_num}"
+            # Change the outline color to highlight
+            for item_id in self.canvas.find_withtag(state_tag):
+                item_type = self.canvas.type(item_id)
+                if item_type == "rectangle":
+                    current_fill = self.canvas.itemcget(item_id, "fill")
+                    current_outline = self.canvas.itemcget(item_id, "outline")
+                    # Store original colors for restoration
+                    self.canvas.itemconfig(item_id, outline="#ffc107", width=3)
+                    break
+            
+            # Bring highlight to front
+            self.canvas.tag_raise("highlight")
+
+    def _clear_highlights(self):
+        """Clear all highlights from the diagram."""
+        self.canvas.delete("highlight")
+        
+        # Reset state colors - restore original outline
+        for i in range(len(self._states)):
+            state_tag = f"state_{i}"
+            # Reset outline to original color
+            for item_id in self.canvas.find_withtag(state_tag):
+                item_type = self.canvas.type(item_id)
+                if item_type == "rectangle":
+                    self.canvas.itemconfig(item_id, outline="#495057", width=2)
+                    break
+
+    def update_theme(self, theme_name):
+        """Update highlight colors based on current theme."""
+        self._current_theme = theme_name
+        # Clear any existing highlights when theme changes
+        self._clear_highlights()
