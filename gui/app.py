@@ -39,6 +39,9 @@ class VisParserApp:
             minsize=(1000, 650),
         )
 
+        # Theme state
+        self.current_theme = "darkly"
+
         self._apply_custom_styles()
         self._build_layout()
 
@@ -61,6 +64,20 @@ class VisParserApp:
                          font=("Segoe UI", 9, "bold"), padding=4)
 
     # ------------------------------------------------------------------ #
+    #  Theme toggle                                                       #
+    # ------------------------------------------------------------------ #
+    def _toggle_theme(self):
+        """Toggle between dark and light theme."""
+        if self.current_theme == "darkly":
+            self.current_theme = "litera"
+            self.theme_button.config(text="🌙 Dark")
+        else:
+            self.current_theme = "darkly"
+            self.theme_button.config(text="☀️ Light")
+        
+        self.root.style.theme_use(self.current_theme)
+
+    # ------------------------------------------------------------------ #
     #  Layout                                                             #
     # ------------------------------------------------------------------ #
     def _build_layout(self):
@@ -77,6 +94,18 @@ class VisParserApp:
                   font=("Segoe UI", 10), bootstyle="secondary").pack(
             side="left", padx=14, pady=(6, 0),
         )
+
+        # Theme toggle button on the right
+        theme_frame = ttk.Frame(header)
+        theme_frame.pack(side="right")
+        self.theme_button = ttk.Button(
+            theme_frame,
+            text="☀️ Light",
+            command=self._toggle_theme,
+            bootstyle="info",
+            width=12,
+        )
+        self.theme_button.pack(side="right")
 
         # Separator
         ttk.Separator(self.root, bootstyle="secondary").pack(
