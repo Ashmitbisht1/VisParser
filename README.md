@@ -1,4 +1,4 @@
-# ⟪ VisParser ⟫ — Bottom-Up Parser Visualizer
+# ⟪ ParserVis ⟫ — Bottom-Up Parser Visualizer
 
 An interactive desktop application that visualizes bottom-up (shift-reduce) parsing algorithms. Built with Python and Tkinter, themed with ttkbootstrap.
 
@@ -29,7 +29,7 @@ Enter a context-free grammar, select a parser type, and watch the automaton, par
 ## Project Structure
 
 ```
-VisParser/
+ParserVis/
 ├── main.py                 # Entry point
 ├── core/
 │   ├── grammar.py          # Grammar parsing & representation

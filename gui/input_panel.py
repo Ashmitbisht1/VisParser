@@ -31,7 +31,7 @@ class InputPanel(ttk.Frame):
         parser_combo = ttk.Combobox(
             sel_frame,
             textvariable=self.parser_var,
-            values=["LR(0)", "SLR(1)", "CLR(1)", "LALR(1)"],
+            values=["LR(0)", "SLR(1)", "CLR(1)", "LALR(1)", "Operator Precedence"],
             state="readonly",
             width=12,
         )
@@ -125,6 +125,25 @@ class InputPanel(ttk.Frame):
         for nt in sorted_nts:
             vals = ", ".join(sorted(follow_sets.get(nt, set())))
             self.ff_text.insert("end", f"  FOLLOW({nt}) = {{ {vals} }}\n")
+
+        self.ff_text.config(state="disabled")
+
+    def show_firstterm_lastterm(self, firstterm_sets, lastterm_sets, non_terminals):
+        """Display FIRSTTERM and LASTTERM sets (for operator precedence)."""
+        self.ff_text.config(state="normal")
+        self.ff_text.delete("1.0", "end")
+
+        sorted_nts = sorted(non_terminals)
+
+        self.ff_text.insert("end", "FIRSTTERM:\n")
+        for nt in sorted_nts:
+            vals = ", ".join(sorted(firstterm_sets.get(nt, set())))
+            self.ff_text.insert("end", f"  FIRSTTERM({nt}) = {{ {vals} }}\n")
+
+        self.ff_text.insert("end", "\nLASTTERM:\n")
+        for nt in sorted_nts:
+            vals = ", ".join(sorted(lastterm_sets.get(nt, set())))
+            self.ff_text.insert("end", f"  LASTTERM({nt}) = {{ {vals} }}\n")
 
         self.ff_text.config(state="disabled")
 

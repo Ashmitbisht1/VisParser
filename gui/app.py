@@ -16,10 +16,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.grammar import Grammar
 from core.first_follow import compute_first, compute_follow
 from core.parser_engine import parse_string
+from core.op_parser_engine import op_parse_string
 from parsers.lr0 import build_lr0_table
 from parsers.slr1 import build_slr1_table
 from parsers.clr1 import build_clr1_table
 from parsers.lalr1 import build_lalr1_table
+from parsers.operator_precedence import build_op_table, validate_operator_grammar
 from gui.input_panel import InputPanel
 from gui.graph_panel import GraphPanel
 from gui.output_panel import OutputPanel
@@ -28,12 +30,12 @@ from gui.output_panel import OutputPanel
 ANIMATION_DELAY_MS = 700  # milliseconds between each parsing step
 
 
-class VisParserApp:
+class ParserVisApp:
     """Main application controller."""
 
     def __init__(self):
         self.root = tb.Window(
-            title="VisParser – Bottom-Up Parser Visualizer",
+            title="ParserVis – Bottom-Up Parser Visualizer",
             themename="darkly",
             size=(1440, 860),
             minsize=(1000, 650),
@@ -47,6 +49,8 @@ class VisParserApp:
         self._goto_table = None
         self._grammar = None
         self._has_conflicts = False
+        self._parser_type = None      # track which parser was built
+        self._prec_table = None       # for OP parser
 
     # ------------------------------------------------------------------ #
     #  Custom styles (on top of ttkbootstrap theme)                       #
@@ -70,7 +74,7 @@ class VisParserApp:
 
         title_frame = ttk.Frame(header)
         title_frame.pack(side="left")
-        ttk.Label(title_frame, text="⟪ VisParser ⟫",
+        ttk.Label(title_frame, text="⟪ ParserVis ⟫",
                   font=("Segoe UI", 18, "bold"),
                   bootstyle="info").pack(side="left")
         ttk.Label(title_frame, text="Bottom-Up Parser Visualizer",
@@ -103,6 +107,14 @@ class VisParserApp:
 
     def _on_build(self, grammar_text: str, parser_type: str):
         """Called when the user clicks Build."""
+        self._parser_type = parser_type
+
+        # ---- Operator Precedence branch (no augmentation) ----
+        if parser_type == "Operator Precedence":
+            self._on_build_op(grammar_text)
+            return
+
+        # ---- LR-family branch ----
         try:
             base_grammar = Grammar.from_text(grammar_text)
             grammar = base_grammar.augment()
@@ -133,6 +145,7 @@ class VisParserApp:
         self._action_table = action
         self._goto_table = goto
         self._has_conflicts = bool(conflicts)
+        self._prec_table = None
 
         # Clear old parse output immediately
         self.output_panel.clear()
@@ -162,13 +175,91 @@ class VisParserApp:
         self.root.after(self.BUILD_STAGE_DELAY_MS * 3, _show_table_and_warnings)
 
     # ------------------------------------------------------------------ #
+    #  Operator Precedence build                                          #
+    # ------------------------------------------------------------------ #
+    def _on_build_op(self, grammar_text: str):
+        """Build pipeline for Operator Precedence parser."""
+        try:
+            grammar = Grammar.from_text(grammar_text)
+            self._grammar = grammar
+        except ValueError as e:
+            messagebox.showerror("Grammar Error", str(e))
+            return
+
+        # Validate operator grammar
+        errors = validate_operator_grammar(grammar)
+        if errors:
+            messagebox.showerror(
+                "Not an Operator Grammar",
+                "This grammar is not a valid operator grammar:\n\n" + "\n".join(errors)
+            )
+            return
+
+        try:
+            prec_table, firstterm, lastterm, conflicts, build_errors = build_op_table(grammar)
+        except Exception as e:
+            messagebox.showerror("Build Error", str(e))
+            return
+
+        if build_errors:
+            messagebox.showerror(
+                "Build Error",
+                "\n".join(build_errors)
+            )
+            return
+
+        self._prec_table = prec_table
+        self._action_table = None
+        self._goto_table = None
+        self._has_conflicts = bool(conflicts)
+
+        # Clear old parse output
+        self.output_panel.clear()
+
+        # Stage 1: Show grammar (not augmented for OP)
+        self.input_panel.show_augmented(grammar)
+
+        # Stage 2: Show FIRSTTERM/LASTTERM
+        self.root.after(self.BUILD_STAGE_DELAY_MS, lambda:
+            self.input_panel.show_firstterm_lastterm(firstterm, lastterm, grammar.non_terminals)
+        )
+
+        # Stage 3: Show "no state diagram" message
+        self.root.after(self.BUILD_STAGE_DELAY_MS * 2, lambda:
+            self.graph_panel.show_no_diagram_message(
+                "Operator Precedence parsing does not use a state diagram."
+            )
+        )
+
+        # Stage 4: Show precedence table
+        def _show_op_table():
+            self.graph_panel.show_op_table(prec_table, grammar.terminals, conflicts)
+            if conflicts:
+                messagebox.showwarning(
+                    "Conflicts Detected",
+                    "Precedence relation conflicts:\n\n" + "\n".join(conflicts)
+                )
+
+        self.root.after(self.BUILD_STAGE_DELAY_MS * 3, _show_op_table)
+
+    # ------------------------------------------------------------------ #
     #  String parsing                                                     #
     # ------------------------------------------------------------------ #
     def _on_parse(self, input_str: str):
         """Called when the user clicks Start Parsing."""
-        if self._action_table is None or self._grammar is None:
+        if self._grammar is None:
             messagebox.showinfo("Info", "Please build the grammar first.")
             return
+
+        # Check which parser was used
+        if self._parser_type == "Operator Precedence":
+            if self._prec_table is None:
+                messagebox.showinfo("Info", "Please build the grammar first.")
+                return
+        else:
+            if self._action_table is None:
+                messagebox.showinfo("Info", "Please build the grammar first.")
+                return
 
         if self._has_conflicts:
             messagebox.showerror(
@@ -186,10 +277,15 @@ class VisParserApp:
         self.output_panel.init_buffer(tokens)
 
         # Run parse steps with animation
-        steps = list(parse_string(
-            self._action_table, self._goto_table,
-            self._grammar, input_str
-        ))
+        if self._parser_type == "Operator Precedence":
+            steps = list(op_parse_string(
+                self._prec_table, self._grammar, input_str
+            ))
+        else:
+            steps = list(parse_string(
+                self._action_table, self._goto_table,
+                self._grammar, input_str
+            ))
 
         self._animate_steps(steps, 0, tokens)
 
@@ -207,8 +303,12 @@ class VisParserApp:
         # Update step in detailed view
         self.output_panel.add_step(index + 1, stack, remaining, action)
 
-        # Update visual stack: extract symbol stack from the interleaved display
-        symbol_stack = self._extract_symbols(stack)
+        # Update visual stack
+        if self._parser_type == "Operator Precedence":
+            # OP stack display is just space-separated symbols (no interleaved states)
+            symbol_stack = [s for s in stack.split() if s != "$"]
+        else:
+            symbol_stack = self._extract_symbols(stack)
         self.output_panel.update_visual_stack(symbol_stack)
 
         if action == "ACCEPT":

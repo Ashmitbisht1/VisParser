@@ -406,6 +406,89 @@ class GraphPanel(ttk.Frame):
             )
             banner.pack(fill="x", pady=(4, 0))
 
+    # ================================================================== #
+    #  Operator Precedence table                                           #
+    # ================================================================== #
+    def show_op_table(self, prec_table, terminals, conflicts):
+        """Display the operator precedence relation matrix."""
+        for widget in self.table_frame.winfo_children():
+            widget.destroy()
+
+        sorted_terms = sorted(t for t in terminals if t != "$") + ["$"]
+
+        col_ids = ["c0"] + [f"c{i+1}" for i in range(len(sorted_terms))]
+        all_col_names = [""] + sorted_terms
+
+        self.tree = ttk.Treeview(
+            self.table_frame, columns=col_ids, show="headings", height=14,
+        )
+
+        for cid, col_name in zip(col_ids, all_col_names):
+            self.tree.heading(cid, text=col_name)
+            if col_name == "":
+                self.tree.column(cid, width=52, anchor="center", minwidth=42, stretch=False)
+            else:
+                self.tree.column(cid, width=56, anchor="center", minwidth=40)
+
+        # Tags
+        self.tree.tag_configure("conflict", background="#e74c3c", foreground="#ffffff")
+        self.tree.tag_configure("even", background="#303030", foreground="#dee2e6")
+        self.tree.tag_configure("odd", background="#3a3a3a", foreground="#dee2e6")
+
+        for row_idx, row_term in enumerate(sorted_terms):
+            values = [row_term]
+            row_has_conflict = False
+
+            for col_term in sorted_terms:
+                rel = prec_table.get((row_term, col_term))
+                if rel is None:
+                    values.append("")
+                elif rel == "<":
+                    values.append("⋖")
+                elif rel == ">":
+                    values.append("⋗")
+                elif rel == "=":
+                    values.append("≐")
+                else:
+                    values.append(rel)
+
+            tag = "even" if row_idx % 2 == 0 else "odd"
+            self.tree.insert("", "end", values=values, tags=(tag,))
+
+        # Scrollbars
+        sy = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
+        sx = ttk.Scrollbar(self.table_frame, orient="horizontal", command=self.tree.xview)
+        self.tree.config(yscrollcommand=sy.set, xscrollcommand=sx.set)
+        sy.pack(side="right", fill="y")
+        sx.pack(side="bottom", fill="x")
+        self.tree.pack(fill="both", expand=True)
+
+        if conflicts:
+            conflict_text = "\n".join(conflicts)
+            banner = tk.Label(
+                self.table_frame,
+                text=f"⚠  {conflict_text}",
+                bg="#5a2020", fg="#e74c3c",
+                font=("Segoe UI", 9), justify="left", wraplength=600, anchor="w",
+                padx=10, pady=6,
+            )
+            banner.pack(fill="x", pady=(4, 0))
+
+    def show_no_diagram_message(self, message="No state diagram for this parser type"):
+        """Clear the diagram area and show a message."""
+        self.canvas.delete("all")
+        self._positions.clear()
+        self._transitions.clear()
+        self._states = []
+        self._grammar = None
+        self.canvas.update_idletasks()
+        cw = max(self.canvas.winfo_width(), 400)
+        ch = max(self.canvas.winfo_height(), 200)
+        self.canvas.create_text(
+            cw // 2, ch // 2, text=message,
+            fill="#6c757d", font=("Segoe UI", 12, "italic"),
+        )
+
     def clear(self):
         """Clear diagram and table."""
         self.canvas.delete("all")
@@ -415,3 +498,4 @@ class GraphPanel(ttk.Frame):
         self._grammar = None
         for widget in self.table_frame.winfo_children():
             widget.destroy()
+
