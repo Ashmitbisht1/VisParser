@@ -82,6 +82,24 @@ class ParserVisApp:
             side="left", padx=14, pady=(6, 0),
         )
 
+        # Parser Selection (Segmented Control style)
+        self.parser_var = tk.StringVar(value="SLR(1)")
+        parser_frame = ttk.Frame(header)
+        parser_frame.pack(side="right", padx=(0, 10))
+        
+        ttk.Label(parser_frame, text="Parser:", font=("Segoe UI", 10, "bold"),
+                  bootstyle="secondary").pack(side="left", padx=(0, 10))
+        
+        parsers = ["LR(0)", "SLR(1)", "CLR(1)", "LALR(1)", "Operator Precedence"]
+        for p in parsers:
+            ttk.Radiobutton(
+                parser_frame, 
+                text=p, 
+                variable=self.parser_var, 
+                value=p,
+                bootstyle="info-outline-toolbutton"
+            ).pack(side="left", padx=2)
+
         # Separator
         ttk.Separator(self.root, bootstyle="secondary").pack(
             fill="x", padx=12, pady=(4, 0),
@@ -96,17 +114,27 @@ class ParserVisApp:
         self.output_panel = OutputPanel(self.paned, on_parse_callback=self._on_parse)
 
         self.paned.add(self.input_panel, weight=1)
-        self.paned.add(self.graph_panel, weight=2)
+        self.paned.add(self.graph_panel, weight=4)
         self.paned.add(self.output_panel, weight=1)
 
+        def _set_initial_sashes():
+            w = self.paned.winfo_width()
+            if w > 100:
+                self.paned.sashpos(0, int(w * 0.22))
+                self.paned.sashpos(1, int(w * 0.78))
+            else:
+                self.root.after(50, _set_initial_sashes)
+        
+        self.root.after(50, _set_initial_sashes)
     # ------------------------------------------------------------------ #
     #  Build pipeline                                                     #
     # ------------------------------------------------------------------ #
     # Delay (ms) between each build stage for a sequential reveal effect
     BUILD_STAGE_DELAY_MS = 400
 
-    def _on_build(self, grammar_text: str, parser_type: str):
+    def _on_build(self, grammar_text: str):
         """Called when the user clicks Build."""
+        parser_type = self.parser_var.get()
         self._parser_type = parser_type
 
         # ---- Operator Precedence branch (no augmentation) ----
