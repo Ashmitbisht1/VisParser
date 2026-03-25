@@ -41,6 +41,7 @@ class VisParserApp:
 
         # Theme state
         self.current_theme = "darkly"
+        self.output_panel_collapsed = False
 
         self._apply_custom_styles()
         self._build_layout()
@@ -75,11 +76,23 @@ class VisParserApp:
             self.current_theme = "darkly"
             self.theme_button.config(text="☀️ Light")
         
-        self.root.style.theme_use(self.current_theme)
-
+        self.root.style.theme_use(self.current_theme)        # Update graph panel theme for highlighting
+        self.graph_panel.update_theme(self.current_theme)
     # ------------------------------------------------------------------ #
-    #  Layout                                                             #
+    #  Parser panel toggle                                                #
     # ------------------------------------------------------------------ #
+    def _toggle_parser_panel(self):
+        """Toggle visibility of the string parser panel."""
+        if self.output_panel_collapsed:
+            # Show the parser panel
+            self.paned.add(self.output_panel, weight=1)
+            self.collapse_button.config(text="Collapse")
+            self.output_panel_collapsed = False
+        else:
+            # Hide the parser panel
+            self.paned.forget(self.output_panel)
+            self.collapse_button.config(text="Expand")
+            self.output_panel_collapsed = True
     def _build_layout(self):
         # Header
         header = ttk.Frame(self.root)
@@ -106,6 +119,16 @@ class VisParserApp:
             width=12,
         )
         self.theme_button.pack(side="right")
+        
+        # Collapse string parser button
+        self.collapse_button = ttk.Button(
+            theme_frame,
+            text="Collapse",
+            command=self._toggle_parser_panel,
+            bootstyle="secondary",
+            width=10,
+        )
+        self.collapse_button.pack(side="right", padx=(0, 10))
 
         # Separator
         ttk.Separator(self.root, bootstyle="secondary").pack(
