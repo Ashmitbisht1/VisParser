@@ -5,6 +5,7 @@ Uses ttkbootstrap for a modern dark theme.
 """
 import sys
 import os
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, messagebox
 import ttkbootstrap as tb
@@ -85,10 +86,10 @@ class ParserVisApp:
         # Parser Selection (Segmented Control style)
         self.parser_var = tk.StringVar(value="SLR(1)")
         parser_frame = ttk.Frame(header)
-        parser_frame.pack(side="right", padx=(0, 10))
+        parser_frame.pack(side="left", padx=(30, 10))
         
         ttk.Label(parser_frame, text="Parser:", font=("Segoe UI", 10, "bold"),
-                  bootstyle="secondary").pack(side="left", padx=(0, 10))
+                  bootstyle="secondary").pack(side="left", padx=(0, 5))
         
         parsers = ["LR(0)", "SLR(1)", "CLR(1)", "LALR(1)", "Operator Precedence"]
         for p in parsers:
@@ -99,6 +100,30 @@ class ParserVisApp:
                 value=p,
                 bootstyle="info-outline-toolbutton"
             ).pack(side="left", padx=2)
+
+        # Study Theory Section
+        study_frame = ttk.Frame(header)
+        study_frame.pack(side="left", padx=(20, 10))
+        
+        ttk.Label(study_frame, text="Study Theory:", font=("Segoe UI", 10, "bold"),
+                  bootstyle="secondary").pack(side="left", padx=(0, 5))
+        
+        study_links = {
+            "LR(0)": "https://www.geeksforgeeks.org/lr-parser/",
+            "SLR(1)": "https://www.geeksforgeeks.org/slr-parser-with-examples/",
+            "CLR(1)": "https://www.geeksforgeeks.org/clr-parser-with-examples/",
+            "LALR(1)": "https://www.geeksforgeeks.org/lalr-parser-in-compiler-design/",
+            "Operator Precedence": "https://www.geeksforgeeks.org/operator-precedence-parsing/"
+        }
+        
+        for p in parsers:
+            btn = ttk.Button(
+                study_frame,
+                text=p,
+                bootstyle="success-outline-toolbutton",
+                command=lambda url=study_links[p]: webbrowser.open_new_tab(url)
+            )
+            btn.pack(side="left", padx=2)
 
         # Separator
         ttk.Separator(self.root, bootstyle="secondary").pack(
