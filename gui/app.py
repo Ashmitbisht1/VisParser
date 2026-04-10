@@ -125,6 +125,14 @@ class ParserVisApp:
             )
             btn.pack(side="left", padx=2)
 
+        # Reset button (right-aligned)
+        self.reset_btn = ttk.Button(
+            header, text="⟲  Reset",
+            command=self._on_reset,
+            bootstyle="danger-outline",
+        )
+        self.reset_btn.pack(side="right", padx=(10, 0))
+
         # Separator
         ttk.Separator(self.root, bootstyle="secondary").pack(
             fill="x", padx=12, pady=(4, 0),
@@ -386,6 +394,39 @@ class ParserVisApp:
         for i in range(1, len(parts), 2):
             symbols.append(parts[i])
         return symbols
+
+    # ------------------------------------------------------------------ #
+    #  Reset                                                              #
+    # ------------------------------------------------------------------ #
+    def _on_reset(self):
+        """Reset everything back to the initial application state."""
+        # Clear internal state
+        self._action_table = None
+        self._goto_table = None
+        self._grammar = None
+        self._has_conflicts = False
+        self._parser_type = None
+        self._prec_table = None
+
+        # Reset parser selection to default
+        self.parser_var.set("SLR(1)")
+
+        # Clear all three panels
+        self.input_panel.clear_info()
+        self.graph_panel.clear()
+        self.output_panel.clear()
+
+        # Restore sample grammar
+        self.input_panel.grammar_text.delete("1.0", "end")
+        sample = "E -> E + T | T\nT -> T * F | F\nF -> ( E ) | id"
+        self.input_panel.grammar_text.insert("1.0", sample)
+
+        # Restore default input string
+        self.output_panel.string_entry.delete(0, "end")
+        self.output_panel.string_entry.insert(0, "id + id * id")
+
+        # Re-enable parse button in case it was disabled
+        self.output_panel.enable_parse_button(True)
 
     # ------------------------------------------------------------------ #
     #  Run                                                                #
