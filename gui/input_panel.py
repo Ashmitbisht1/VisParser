@@ -14,28 +14,10 @@ class InputPanel(ttk.Frame):
         self._on_build = on_build_callback
         self._build_widgets()
 
-    # ------------------------------------------------------------------ #
-    #  Widget construction                                                #
-    # ------------------------------------------------------------------ #
     def _build_widgets(self):
         # Section title
         ttk.Label(self, text="◈  Grammar Input", font=("Segoe UI", 12, "bold"),
                   bootstyle="info").pack(padx=10, pady=(8, 4), anchor="w")
-
-        # Parser type selector
-        sel_frame = ttk.Frame(self)
-        sel_frame.pack(fill="x", padx=10, pady=4)
-        ttk.Label(sel_frame, text="Parser:", font=("Segoe UI", 9, "bold"),
-                  bootstyle="secondary").pack(side="left")
-        self.parser_var = tk.StringVar(value="SLR(1)")
-        parser_combo = ttk.Combobox(
-            sel_frame,
-            textvariable=self.parser_var,
-            values=["LR(0)", "SLR(1)", "CLR(1)", "LALR(1)"],
-            state="readonly",
-            width=12,
-        )
-        parser_combo.pack(side="left", padx=8)
 
         # Grammar text widget
         ttk.Label(self, text="Enter grammar — one rule per line:",
@@ -97,9 +79,8 @@ class InputPanel(ttk.Frame):
     # ------------------------------------------------------------------ #
     def _on_build_click(self):
         grammar_str = self.grammar_text.get("1.0", "end").strip()
-        parser_type = self.parser_var.get()
         if self._on_build:
-            self._on_build(grammar_str, parser_type)
+            self._on_build(grammar_str)
 
     def show_augmented(self, grammar):
         """Display the augmented grammar."""

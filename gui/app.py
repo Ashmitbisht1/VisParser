@@ -5,6 +5,7 @@ Uses ttkbootstrap for a modern dark theme.
 """
 import sys
 import os
+import webbrowser
 import tkinter as tk
 from tkinter import ttk, messagebox
 import ttkbootstrap as tb
@@ -28,12 +29,12 @@ from gui.output_panel import OutputPanel
 ANIMATION_DELAY_MS = 700  # milliseconds between each parsing step
 
 
-class VisParserApp:
+class ParserVisApp:
     """Main application controller."""
 
     def __init__(self):
         self.root = tb.Window(
-            title="VisParser – Bottom-Up Parser Visualizer",
+            title="ParserVis – Bottom-Up Parser Visualizer",
             themename="darkly",
             size=(1440, 860),
             minsize=(1000, 650),
@@ -70,13 +71,54 @@ class VisParserApp:
 
         title_frame = ttk.Frame(header)
         title_frame.pack(side="left")
-        ttk.Label(title_frame, text="⟪ VisParser ⟫",
+        ttk.Label(title_frame, text="⟪ ParserVis ⟫",
                   font=("Segoe UI", 18, "bold"),
                   bootstyle="info").pack(side="left")
         ttk.Label(title_frame, text="Bottom-Up Parser Visualizer",
                   font=("Segoe UI", 10), bootstyle="secondary").pack(
             side="left", padx=14, pady=(6, 0),
         )
+
+        # Parser Selection (Segmented Control style)
+        self.parser_var = tk.StringVar(value="SLR(1)")
+        parser_frame = ttk.Frame(header)
+        parser_frame.pack(side="left", padx=(30, 10))
+        
+        ttk.Label(parser_frame, text="Parser:", font=("Segoe UI", 10, "bold"),
+                  bootstyle="secondary").pack(side="left", padx=(0, 5))
+        
+        parsers = ["LR(0)", "SLR(1)", "CLR(1)", "LALR(1)"]
+        for p in parsers:
+            ttk.Radiobutton(
+                parser_frame, 
+                text=p, 
+                variable=self.parser_var, 
+                value=p,
+                bootstyle="info-outline-toolbutton"
+            ).pack(side="left", padx=2)
+
+        # Study Theory Section
+        study_frame = ttk.Frame(header)
+        study_frame.pack(side="left", padx=(20, 10))
+        
+        ttk.Label(study_frame, text="Study Theory:", font=("Segoe UI", 10, "bold"),
+                  bootstyle="secondary").pack(side="left", padx=(0, 5))
+        
+        study_links = {
+            "LR(0)": "https://www.geeksforgeeks.org/lr-parser/",
+            "SLR(1)": "https://www.geeksforgeeks.org/slr-parser-with-examples/",
+            "CLR(1)": "https://www.geeksforgeeks.org/clr-parser-with-examples/",
+            "LALR(1)": "https://www.geeksforgeeks.org/lalr-parser-in-compiler-design/",
+        }
+        
+        for p in parsers:
+            btn = ttk.Button(
+                study_frame,
+                text=p,
+                bootstyle="success-outline-toolbutton",
+                command=lambda url=study_links[p]: webbrowser.open_new_tab(url)
+            )
+            btn.pack(side="left", padx=2)
 
         # Separator
         ttk.Separator(self.root, bootstyle="secondary").pack(
@@ -92,8 +134,18 @@ class VisParserApp:
         self.output_panel = OutputPanel(self.paned, on_parse_callback=self._on_parse)
 
         self.paned.add(self.input_panel, weight=1)
-        self.paned.add(self.graph_panel, weight=2)
+        self.paned.add(self.graph_panel, weight=4)
         self.paned.add(self.output_panel, weight=1)
+
+        def _set_initial_sashes():
+            w = self.paned.winfo_width()
+            if w > 100:
+                self.paned.sashpos(0, int(w * 0.22))
+                self.paned.sashpos(1, int(w * 0.78))
+            else:
+                self.root.after(50, _set_initial_sashes)
+        
+        self.root.after(50, _set_initial_sashes)
 
     # ------------------------------------------------------------------ #
     #  Build pipeline                                                     #
@@ -101,8 +153,10 @@ class VisParserApp:
     # Delay (ms) between each build stage for a sequential reveal effect
     BUILD_STAGE_DELAY_MS = 400
 
-    def _on_build(self, grammar_text: str, parser_type: str):
+    def _on_build(self, grammar_text: str):
         """Called when the user clicks Build."""
+        parser_type = self.parser_var.get()
+
         try:
             base_grammar = Grammar.from_text(grammar_text)
             grammar = base_grammar.augment()
