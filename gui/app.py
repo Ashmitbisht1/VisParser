@@ -52,6 +52,7 @@ class ParserVisApp:
         self._has_conflicts = False
         self._parser_type = None      # track which parser was built
         self._prec_table = None       # for OP parser
+        self._animation_id = None
 
     # ------------------------------------------------------------------ #
     #  Custom styles (on top of ttkbootstrap theme)                       #
@@ -333,6 +334,10 @@ class ParserVisApp:
         self.output_panel.clear()
         self.output_panel.enable_parse_button(False)
 
+        if getattr(self, '_animation_id', None):
+            self.root.after_cancel(self._animation_id)
+            self._animation_id = None
+
         # Initialise the input buffer with all tokens
         tokens = input_str.strip().split()
         self.output_panel.init_buffer(tokens)
@@ -382,7 +387,7 @@ class ParserVisApp:
             return
 
         # Schedule next step (slower)
-        self.root.after(ANIMATION_DELAY_MS, self._animate_steps, steps, index + 1, original_tokens)
+        self._animation_id = self.root.after(ANIMATION_DELAY_MS, self._animate_steps, steps, index + 1, original_tokens)
 
     @staticmethod
     def _extract_symbols(stack_display: str) -> list:
@@ -400,6 +405,10 @@ class ParserVisApp:
     # ------------------------------------------------------------------ #
     def _on_reset(self):
         """Reset everything back to the initial application state."""
+        if getattr(self, '_animation_id', None):
+            self.root.after_cancel(self._animation_id)
+            self._animation_id = None
+
         # Clear internal state
         self._action_table = None
         self._goto_table = None
