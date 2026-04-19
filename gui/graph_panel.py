@@ -1,5 +1,6 @@
 """
 Graph panel – state diagram (Canvas) + parsing table (Treeview).
+"""
 import math
 import tkinter as tk
 from tkinter import ttk
