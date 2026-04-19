@@ -2,16 +2,16 @@
 
 An interactive desktop application that visualizes bottom-up (shift-reduce) parsing algorithms. Built with Python and Tkinter, themed with ttkbootstrap.
 
-Enter a context-free grammar, select a parser type, and watch the automaton, parsing table, and step-by-step string parsing come to life — complete with draggable state diagrams and animated parsing.
+Enter a context-free grammar, select a parser type, and watch the automaton, parsing table, and step-by-step string parsing come to life.
 
 ---
 
 ## Features
 
 - **Four parser types** — LR(0), SLR(1), CLR(1), LALR(1)
-- **State diagram** — Auto-generated canonical collection of items, fully **draggable** (rearrange states by clicking and dragging)
+- **State diagram** — Auto-generated canonical collection of items, visually arranged
 - **Parsing table** — ACTION/GOTO table with color-coded accept rows and conflict highlighting
-- **Animated string parsing** — Step-by-step shift/reduce visualization with configurable delay
+- **Fast Animated string parsing** — Step-by-step shift/reduce UI animations have been snappied-up for quick responses
 - **Dual stack views** — Switch between a detailed step table and a visual stack diagram
 - **Input buffer visualization** — Lookahead arrow (▼) and crossed-out consumed tokens
 - **FIRST & FOLLOW sets** — Computed and displayed for every non-terminal
@@ -44,9 +44,11 @@ ParserVis/
 └── gui/
     ├── app.py              # Main application window & orchestration
     ├── input_panel.py      # Grammar input, parser selector, FIRST/FOLLOW display
-    ├── graph_panel.py      # State diagram (draggable) & parsing table
+    ├── graph_panel.py      # State diagram & parsing table
     └── output_panel.py     # String input, parsing animation, stack views
 ```
+
+> **For a more detailed explanation of each module and function, please refer to [MODULES_EXPLANATION.md](MODULES_EXPLANATION.md).**
 
 ---
 
@@ -79,11 +81,10 @@ python main.py
    F -> ( E ) | id
    ```
 2. **Select a parser type** from the dropdown (LR(0), SLR(1), CLR(1), LALR(1))
-3. Click **▶ Build Automaton** — the augmented grammar, FIRST/FOLLOW sets, state diagram, and parsing table appear in sequence
-4. **Drag states** in the diagram to rearrange them for clarity
-5. Enter an **input string** (space-separated tokens, e.g. `id + id * id`)
-6. Click **▶ Start Parsing** — watch the animated step-by-step parse with buffer updates and stack visualization
-7. Toggle between **Detailed Steps** (table) and **Visual Stack** (graphical) views
+3. Click **▶ Build Automaton** — the augmented grammar, FIRST/FOLLOW sets, state diagram, and parsing table appear in sequence.
+4. Enter an **input string** (space-separated tokens, e.g. `id + id * id`)
+5. Click **▶ Start Parsing** — watch the animated step-by-step parse with buffer updates and stack visualization
+6. Toggle between **Detailed Steps** (table) and **Visual Stack** (graphical) views
 
 ---
 

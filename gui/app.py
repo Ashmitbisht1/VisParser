@@ -28,7 +28,7 @@ from gui.graph_panel import GraphPanel
 from gui.output_panel import OutputPanel
 
 
-ANIMATION_DELAY_MS = 700  # milliseconds between each parsing step
+ANIMATION_DELAY_MS = 300  # milliseconds between each parsing step
 
 
 class ParserVisApp:
@@ -163,7 +163,7 @@ class ParserVisApp:
     #  Build pipeline                                                     #
     # ------------------------------------------------------------------ #
     # Delay (ms) between each build stage for a sequential reveal effect
-    BUILD_STAGE_DELAY_MS = 400
+    BUILD_STAGE_DELAY_MS = 200
 
     def _on_build(self, grammar_text: str):
         """Called when the user clicks Build."""

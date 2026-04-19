@@ -1,0 +1,512 @@
+# ParserVis — Complete Project Walkthrough
+
+## What Is This Project?
+
+**ParserVis** is an interactive desktop application that **visualizes bottom-up (shift-reduce) parsing algorithms**. It lets you:
+
+1. Enter a context-free grammar
+2. Select a parser type (LR(0), SLR(1), CLR(1), or LALR(1))
+3. Build the automaton — see the state diagram, parsing table, FIRST/FOLLOW sets
+4. Parse an input string step-by-step with animation
+
+Built with **Python 3.10+**, **Tkinter**, and **ttkbootstrap** (dark theme).
+
+---
+
+## Architecture Overview
+
+The project follows a clean **3-layer architecture** with clear separation of concerns:
+
+```mermaid
+graph TB
+    subgraph GUI["🖥️ GUI Layer (gui/)"]
+        APP["app.py<br/>Orchestrator"]
+        IP["input_panel.py<br/>Grammar Input"]
+        GP["graph_panel.py<br/>State Diagram + Table"]
+        OP["output_panel.py<br/>String Parser"]
+    end
+
+    subgraph PARSERS["⚙️ Parsers Layer (parsers/)"]
+        LRB["lr_base.py<br/>Shared LR Items, Closure, Goto"]
+        LR0["lr0.py<br/>LR(0) Table Builder"]
+        SLR["slr1.py<br/>SLR(1) Table Builder"]
+        CLR["clr1.py<br/>CLR(1) Table Builder"]
+        LALR["lalr1.py<br/>LALR(1) Table Builder"]
+    end
+
+    subgraph CORE["📦 Core Layer (core/)"]
+        G["grammar.py<br/>Grammar Parsing & Representation"]
+        FF["first_follow.py<br/>FIRST/FOLLOW Sets"]
+        PE["parser_engine.py<br/>Shift-Reduce Engine"]
+    end
+
+    APP --> IP
+    APP --> GP
+    APP --> OP
+
+    APP --> G
+    APP --> FF
+    APP --> PE
+    APP --> LR0
+    APP --> SLR
+    APP --> CLR
+    APP --> LALR
+
+    LR0 --> LRB
+    SLR --> LRB
+    CLR --> LRB
+    LALR --> LRB
+
+    SLR --> FF
+    CLR --> FF
+    LALR --> FF
+
+    LRB --> G
+    FF --> G
+    PE --> G
+```
+
+| Layer | Purpose | Dependencies |
+|-------|---------|-------------|
+| **Core** (`core/`) | Grammar representation, FIRST/FOLLOW computation, generic parsing engine | None (foundational) |
+| **Parsers** (`parsers/`) | LR automaton construction & table builders for 4 parser types | Core |
+| **GUI** (`gui/`) | All visual components — input, diagram, table, animation | Core + Parsers |
+
+---
+
+## File-by-File Breakdown
+
+### Entry Point
+
+#### [main.py](file:///c:/Users/ashmi/Desktop/VisParser/main.py)
+
+The application entry point. Extremely simple — adds the project root to `sys.path`, creates a `ParserVisApp` instance, and calls `app.run()` (which launches the Tkinter mainloop).
+
+```python
+from gui.app import ParserVisApp
+
+def main():
+    app = ParserVisApp()
+    app.run()
+```
+
+---
+
+### Core Layer (`core/`)
+
+This layer contains **no UI code** — it's pure data structures and algorithms.
+
+---
+
+#### [grammar.py](file:///c:/Users/ashmi/Desktop/VisParser/core/grammar.py) — Grammar Representation
+
+The `Grammar` class is the **heart of the data model**. It:
+
+- **Parses** multi-line grammar text (e.g., `E -> E + T | T`)
+- **Stores** productions as a list of `(lhs: str, rhs: list[str])` tuples
+- **Augments** the grammar by adding `S' -> S` (required for LR parsing)
+- **Computes** terminal and non-terminal sets automatically
+
+**Key methods:**
+
+| Method | What it does |
+|--------|-------------|
+| `Grammar.from_text(text)` | Class method. Parses `"E -> E + T \| T"` into production tuples |
+| `grammar.augment()` | Returns a new `Grammar` with `S' -> S` prepended as production 0 |
+| `grammar.terminals` | Property. All symbols that never appear on a LHS |
+| `grammar.non_terminals` | Property. All symbols that appear on a LHS |
+| `grammar.productions_for(nt)` | Filter productions for a given non-terminal |
+| `grammar.production_str(idx)` | Human-readable string like `E -> E + T` |
+
+**How parsing works internally:**
+```
+Input text:  "E -> E + T | T"
+       ↓
+Split on "->" → lhs = "E", rhs_text = " E + T | T"
+Split rhs_text on "|" → ["E + T", "T"]
+Split each alternative on spaces → ["E", "+", "T"] and ["T"]
+       ↓
+Productions: [(E, [E, +, T]), (E, [T])]
+```
+
+The first LHS encountered becomes the `start_symbol`.
+
+---
+
+#### [first_follow.py](file:///c:/Users/ashmi/Desktop/VisParser/core/first_follow.py) — FIRST & FOLLOW Sets
+
+Implements the classical **fixed-point iteration** algorithms from compiler theory textbooks:
+
+**`compute_first(grammar)`** — Computes FIRST sets:
+1. For every terminal `a`: `FIRST(a) = {a}`
+2. For every production `A -> X₁X₂…Xₙ`:
+   - Add `FIRST(X₁) - {ε}` to `FIRST(A)`
+   - If `ε ∈ FIRST(X₁)`, also add `FIRST(X₂) - {ε}`, and so on
+   - If all `Xᵢ` can derive `ε`, add `ε` to `FIRST(A)`
+3. Repeat until no changes (fixed-point)
+
+**`first_of_string(symbols, first)`** — Computes FIRST of a sequence of symbols (used by LR(1) closure).
+
+**`compute_follow(grammar, first)`** — Computes FOLLOW sets:
+1. `$ ∈ FOLLOW(S)` (end-marker in start symbol's FOLLOW)
+2. For each production `A -> αBβ`:
+   - Add `FIRST(β) - {ε}` to `FOLLOW(B)`
+   - If `ε ∈ FIRST(β)` or β is empty, add `FOLLOW(A)` to `FOLLOW(B)`
+3. Repeat until no changes
+
+---
+
+#### [parser_engine.py](file:///c:/Users/ashmi/Desktop/VisParser/core/parser_engine.py) — Shift-Reduce Engine
+
+A **generic, table-driven shift-reduce parser** that works with ANY ACTION/GOTO table:
+
+**`parse_string(action_table, goto_table, grammar, input_string)`** — A Python **generator** that yields `(stack_display, remaining_input, action_description)` tuples for each parsing step.
+
+The algorithm:
+```
+1. Initialize: stack = [0], pointer = 0, tokens = input + "$"
+2. Loop:
+   a. state = top of stack
+   b. token = tokens[pointer]
+   c. action = ACTION[state][token]
+   d. If SHIFT s → push token + state s, advance pointer
+   e. If REDUCE A -> β → pop |β| states/symbols, push A + GOTO[top][A]
+   f. If ACCEPT → done
+   g. If none → ERROR
+```
+
+It maintains two parallel stacks:
+- **State stack** — integer state numbers `[0, 5, 3, 7]`
+- **Symbol stack** — grammar symbols `[E, +, T]`
+
+The `_format_stack` helper interleaves them for display: `"0 E 5 + 3 T 7"`.
+
+> [!IMPORTANT]
+> The engine is a **generator** — it `yield`s each step. This enables the GUI to animate steps one-by-one with `root.after()` delays.
+
+---
+
+### Parsers Layer (`parsers/`)
+
+This layer implements the **four LR parser variants**. All share a common base.
+
+---
+
+#### [lr_base.py](file:///c:/Users/ashmi/Desktop/VisParser/parsers/lr_base.py) — Shared LR Infrastructure
+
+Provides the foundational building blocks used by all four parsers:
+
+**Data types:**
+| Type | Fields | Used by |
+|------|--------|---------|
+| `LR0Item` | `prod_index`, `dot_pos` | LR(0), SLR(1) |
+| `LR1Item` | `prod_index`, `dot_pos`, `lookahead` | CLR(1), LALR(1) |
+
+Both are frozen dataclasses (immutable, hashable → can be used in sets/frozensets).
+
+**An item like `E -> E · + T` is stored as `LR0Item(prod_index=1, dot_pos=1)`** — referencing production 1 with the dot at position 1.
+
+**LR(0) functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `lr0_closure(items, grammar)` | Expand items by adding initial items for non-terminals after the dot |
+| `lr0_goto(items, symbol, grammar)` | Move the dot past `symbol` in all applicable items, then closure |
+| `lr0_canonical_collection(grammar)` | Build ALL states by repeatedly applying `goto` — returns `(states, transitions)` |
+
+**LR(1) functions (analogous but with lookaheads):**
+
+| Function | Extra parameter |
+|----------|----------------|
+| `lr1_closure(items, grammar, first)` | Uses `first_of_string(β + lookahead)` to compute new lookaheads |
+| `lr1_goto(items, symbol, grammar, first)` | Same idea as LR(0) goto but for LR(1) items |
+| `lr1_canonical_collection(grammar, first)` | Full canonical LR(1) collection |
+
+**Helper functions:**
+- `item_to_str(item, grammar)` — Human-readable: `E -> E · + T` or `E -> E · + T, $`
+- `core_of(item_set)` — Extract `(prod_index, dot_pos)` pairs, stripping lookaheads (used by LALR)
+
+---
+
+#### [lr0.py](file:///c:/Users/ashmi/Desktop/VisParser/parsers/lr0.py) — LR(0) Table Builder
+
+**`build_lr0_table(grammar)`** builds ACTION/GOTO tables with LR(0) rules:
+
+- **SHIFT**: For each transition on a terminal → `ACTION[state][terminal] = shift target`
+- **REDUCE**: When the dot is at the end → **reduce on ALL terminals** (no lookahead)
+- **ACCEPT**: When the augmented production `S' -> S·` is complete → `ACTION[state][$] = accept`
+
+> [!NOTE]
+> LR(0) is the weakest — reduce on ALL terminals means many conflicts. That's why SLR/CLR/LALR exist.
+
+Returns: `(action_table, goto_table, states, transitions, conflicts)`
+
+The `_set_action` helper detects **shift-reduce** and **reduce-reduce** conflicts. On conflict, shift takes priority (standard convention).
+
+---
+
+#### [slr1.py](file:///c:/Users/ashmi/Desktop/VisParser/parsers/slr1.py) — SLR(1) Table Builder
+
+Same automaton as LR(0), but **reduce only on FOLLOW(A)** terminals instead of all terminals:
+
+```python
+# Key difference from LR(0):
+for t in follow_sets.get(lhs, set()):  # Only FOLLOW(lhs), not ALL terminals
+    _set_action(action_table, i, t, ("reduce", item.prod_index), ...)
+```
+
+Returns 7 values: `(action_table, goto_table, states, transitions, conflicts, first_sets, follow_sets)`
+
+---
+
+#### [clr1.py](file:///c:/Users/ashmi/Desktop/VisParser/parsers/clr1.py) — CLR(1) Table Builder
+
+Uses the **full LR(1) canonical collection** (items carry individual lookaheads):
+
+```python
+# Reduce ONLY on the item's specific lookahead:
+_set_action(action_table, i, item.lookahead, ("reduce", item.prod_index), ...)
+```
+
+More precise than SLR(1) → fewer conflicts, but potentially many more states.
+
+---
+
+#### [lalr1.py](file:///c:/Users/ashmi/Desktop/VisParser/parsers/lalr1.py) — LALR(1) Table Builder
+
+The most sophisticated. It:
+
+1. **Builds the full CLR(1) collection** (all LR(1) states)
+2. **Merges states with the same core** — states that differ only in lookaheads get combined
+3. **Remaps transitions** to point to merged state indices
+4. **Builds tables** from the merged states
+
+The merging logic:
+```python
+def _merge_item_sets(set_a, set_b):
+    # For items with same (prod_index, dot_pos), union their lookaheads
+    items = {}
+    for item in set_a | set_b:
+        key = (item.prod_index, item.dot_pos)
+        items.setdefault(key, set()).add(item.lookahead)
+    # Rebuild as LR1Items with all lookaheads
+```
+
+> [!TIP]
+> LALR(1) gives nearly the power of CLR(1) with the state count of SLR(1). It's the most commonly used parser in practice (e.g., YACC, Bison).
+
+---
+
+### GUI Layer (`gui/`)
+
+All visual components. Uses **ttkbootstrap** with the `darkly` theme for a modern dark look.
+
+---
+
+#### [app.py](file:///c:/Users/ashmi/Desktop/VisParser/gui/app.py) — Application Orchestrator
+
+The `ParserVisApp` class is the **central controller**. It:
+
+1. **Creates the window** — 1440×860 ttkbootstrap window with `darkly` theme
+2. **Builds the header** — Title, parser selector (radio buttons), study theory links
+3. **Creates a 3-pane layout** — `PanedWindow` with InputPanel | GraphPanel | OutputPanel
+4. **Orchestrates the build pipeline** via `_on_build()`:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant App as app.py
+    participant IP as InputPanel
+    participant Core as core/
+    participant Parsers as parsers/
+    participant GP as GraphPanel
+    participant OP as OutputPanel
+
+    User->>IP: Types grammar + clicks "Build"
+    IP->>App: _on_build(grammar_text)
+    App->>Core: Grammar.from_text(text)
+    Core-->>App: base_grammar
+    App->>Core: grammar.augment()
+    Core-->>App: augmented_grammar
+
+    App->>Parsers: build_XXX_table(grammar)
+    Parsers-->>App: action, goto, states, transitions, conflicts
+
+    Note over App: Staged reveal (400ms delays)
+
+    App->>IP: Stage 1: show_augmented(grammar)
+    App->>IP: Stage 2: show_first_follow(first, follow)
+    App->>GP: Stage 3: draw_states(states, transitions)
+    App->>GP: Stage 4: show_table(action, goto, conflicts)
+
+    User->>OP: Types string + clicks "Parse"
+    OP->>App: _on_parse(input_str)
+    App->>Core: parse_string(action, goto, grammar, input_str)
+    Core-->>App: generator of (stack, remaining, action) steps
+
+    loop Every 700ms
+        App->>OP: add_step(), set_buffer(), update_visual_stack()
+    end
+```
+
+5. **Orchestrates string parsing** via `_on_parse()` — collects all steps from the generator, then animates them one-by-one with `root.after(700ms)` delays
+
+**The header features:**
+- **Parser selector** — Radio buttons for LR(0)/SLR(1)/CLR(1)/LALR(1)
+- **Study Theory** — Buttons that open GFG articles in the browser for each parser type
+
+---
+
+#### [input_panel.py](file:///c:/Users/ashmi/Desktop/VisParser/gui/input_panel.py) — Left Pane
+
+The left panel provides:
+
+| Section | Widget | Purpose |
+|---------|--------|---------|
+| Grammar Input | `tk.Text` | Multi-line text editor with syntax-appropriate styling |
+| Build Button | `ttk.Button` | Triggers the build pipeline |
+| Augmented Grammar | `tk.Text` (read-only) | Shows numbered productions after augmentation |
+| FIRST/FOLLOW Sets | `tk.Text` (read-only) | Displays computed sets for all non-terminals |
+
+Pre-loaded with the classic expression grammar: `E -> E + T | T / T -> T * F | F / F -> ( E ) | id`
+
+---
+
+#### [graph_panel.py](file:///c:/Users/ashmi/Desktop/VisParser/gui/graph_panel.py) — Center Pane (535 lines — the largest file)
+
+Split vertically into two sections:
+
+**Top: State Diagram (Canvas)**
+- States drawn as rectangles on a grid layout
+- Each box shows: state label (`I0`, `I1`...) + LR items with dots
+- **Fully draggable** — click and drag any state, arrows redraw in real-time
+- Transitions drawn as arrows with labeled symbols
+- Self-loops for transitions back to the same state
+
+**Bottom: Parsing Table (Treeview)**
+- ACTION section (columns for each terminal + `$`)
+- GOTO section (columns for each non-terminal)
+- Color-coded rows: green for accept, red for conflicts
+- **Cross-highlighting** — hover over a cell value to highlight the corresponding state in the diagram
+
+**Drag implementation:**
+```
+_on_press  → Detect if click is on a state box (hit test)
+_on_drag   → Move all canvas items with the state's tag, update position, redraw arrows
+_on_release → Reset cursor, update scroll region
+```
+
+---
+
+#### [output_panel.py](file:///c:/Users/ashmi/Desktop/VisParser/gui/output_panel.py) — Right Pane
+
+Provides the string parsing interface:
+
+| Section | Description |
+|---------|-------------|
+| **Input Entry** | Text field for the input string (default: `id + id * id`) |
+| **Parse Button** | Triggers parsing animation |
+| **Input Buffer** | Canvas showing tokens with ▼ arrow on current lookahead and ~~strikethrough~~ on consumed tokens |
+| **Toggle Buttons** | Switch between "Detailed Steps" and "Visual Stack" views |
+| **Detailed Steps** | Treeview table with columns: Step#, Stack, Input, Action (color-coded: blue=shift, orange=reduce, green=accept, red=error) |
+| **Visual Stack** | Canvas drawing the stack as colored cells from bottom to top (blue=non-terminals, green=terminals, yellow=top of stack) |
+| **Result Label** | Shows "✓ String ACCEPTED" (green) or "✗ String REJECTED" (red) |
+
+---
+
+## Complete Workflow
+
+Here's the **end-to-end workflow** when a user interacts with the application:
+
+### Phase 1: Grammar Input & Automaton Build
+
+```
+1. User types grammar:          "E -> E + T | T"
+                                "T -> T * F | F"
+                                "F -> ( E ) | id"
+
+2. User selects parser:         SLR(1) [radio button]
+
+3. User clicks "Build":         → _on_build(grammar_text) fires
+
+4. Grammar.from_text() parses:  → [(E,[E,+,T]), (E,[T]), (T,[T,*,F]), ...]
+
+5. grammar.augment() adds:      → [(E',[E]), (E,[E,+,T]), (E,[T]), ...]
+
+6. build_slr1_table() runs:
+   a. compute_first(grammar)    → {E: {(, id}, T: {(, id}, F: {(, id}}
+   b. compute_follow(grammar)   → {E: {$, +, )}, T: {$, +, *, )}, ...}
+   c. lr0_canonical_collection  → 12 states + transitions
+   d. Fill ACTION (shift/reduce on FOLLOW) + GOTO
+
+7. Staged reveal (400ms each):
+   Stage 1: Show augmented grammar in left panel
+   Stage 2: Show FIRST/FOLLOW in left panel
+   Stage 3: Draw state diagram in center panel
+   Stage 4: Show parsing table in center panel
+```
+
+### Phase 2: String Parsing Animation
+
+```
+1. User types:                   "id + id * id"
+
+2. User clicks "Parse":         → _on_parse("id + id * id") fires
+
+3. parser_engine.parse_string():
+   - Tokenizes: ["id", "+", "id", "*", "id", "$"]
+   - Runs shift-reduce on ACTION/GOTO tables
+   - Yields steps: (stack, remaining, action)
+
+4. All steps collected into a list
+
+5. Animation loop (every 700ms):
+   Step 1:  Stack "0"           | Input "id + id * id $" | Shift id, go to 5
+   Step 2:  Stack "0 id 5"     | Input "+ id * id $"    | Reduce by F -> id
+   Step 3:  Stack "0 F 3"      | Input "+ id * id $"    | Reduce by T -> F
+   ...
+   Step 11: Stack "0 E 1"      | Input "$"              | ACCEPT ✓
+
+6. Each step updates:
+   - Buffer canvas (strikethrough consumed tokens)
+   - Detailed steps table (new row)
+   - Visual stack (redraw cells)
+
+7. Final: "✓ String ACCEPTED" banner
+```
+
+---
+
+## Design Patterns & Key Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Callback pattern** | Panels don't know about each other — `app.py` wires them via callbacks (`on_build_callback`, `on_parse_callback`) |
+| **Generator for parse steps** | Enables lazy evaluation + animation — steps are yielded one at a time |
+| **Frozen dataclasses for items** | Immutable → hashable → can be stored in `frozenset`s for state comparison |
+| **frozenset for states** | States must be compared for equality (to detect duplicates during canonical collection construction) |
+| **Canvas tags for dragging** | Each state's visual elements share a tag (`state_0`, `state_1`...) for group operations |
+| **Staged reveal with `after()`** | Build results appear sequentially (grammar → FIRST/FOLLOW → diagram → table) for better UX |
+| **Shift-takes-priority on conflict** | Standard compiler theory convention — if shift-reduce conflict, keep shift |
+| **`pydantic`-free design** | Pure Python dataclasses + dicts — no external dependencies beyond `ttkbootstrap` |
+
+---
+
+## Summary Table
+
+| File | Lines | Role |
+|------|-------|------|
+| `main.py` | 21 | Entry point |
+| `core/grammar.py` | 121 | Grammar parsing, augmentation, symbol sets |
+| `core/first_follow.py` | 87 | FIRST/FOLLOW fixed-point computation |
+| `core/parser_engine.py` | 96 | Generic shift-reduce parsing generator |
+| `parsers/lr_base.py` | 214 | LR(0) + LR(1) items, closure, goto, canonical collections |
+| `parsers/lr0.py` | 91 | LR(0) table builder (reduce on ALL terminals) |
+| `parsers/slr1.py` | 89 | SLR(1) table builder (reduce on FOLLOW) |
+| `parsers/clr1.py` | 88 | CLR(1) table builder (reduce on lookahead) |
+| `parsers/lalr1.py` | 136 | LALR(1) table builder (merge CLR states by core) |
+| `gui/app.py` | 296 | Main window, header, orchestration |
+| `gui/input_panel.py` | 118 | Grammar input + computed info display |
+| `gui/graph_panel.py` | 535 | State diagram (draggable) + parsing table (hover-highlighting) |
+| `gui/output_panel.py` | 326 | String parsing, buffer, dual stack views, animation |
+| **Total** | **~2,218** | |

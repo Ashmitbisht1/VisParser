@@ -1,9 +1,5 @@
 """
 Graph panel – state diagram (Canvas) + parsing table (Treeview).
-Split vertically with a resizable sash between diagram and table.
-States are draggable: click and drag any state box to reposition it,
-and all connected arrows update in real-time.
-"""
 import math
 import tkinter as tk
 from tkinter import ttk
@@ -24,7 +20,6 @@ class GraphPanel(ttk.Frame):
         self._transitions = {}      # (src, symbol) -> dst
         self._states = []           # list of frozenset[Item]
         self._grammar = None
-        self._drag_data = None      # {"idx": int, "start_x": int, "start_y": int}
 
         self._build_widgets()
 
@@ -44,7 +39,7 @@ class GraphPanel(ttk.Frame):
         dh.pack(fill="x", padx=10, pady=(8, 0))
         ttk.Label(dh, text="◈  State Diagram", font=("Segoe UI", 11, "bold"),
                   bootstyle="info").pack(side="left")
-        ttk.Label(dh, text="(drag states to rearrange)",
+        ttk.Label(dh, text="",
                   font=("Segoe UI", 8), bootstyle="secondary").pack(side="left", padx=8)
 
         # Canvas with scroll
@@ -62,11 +57,6 @@ class GraphPanel(ttk.Frame):
         self.h_scroll.pack(side="bottom", fill="x")
         self.v_scroll.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
-
-        # Bind drag events
-        self.canvas.bind("<ButtonPress-1>", self._on_press)
-        self.canvas.bind("<B1-Motion>", self._on_drag)
-        self.canvas.bind("<ButtonRelease-1>", self._on_release)
 
         # =================== BOTTOM: Parsing Table =================== #
         table_outer = ttk.Frame(self.vpaned)
@@ -131,7 +121,7 @@ class GraphPanel(ttk.Frame):
         self._update_scroll_region()
 
     def _draw_state_box(self, i):
-        """Draw a single state box at its current position, tagged for dragging."""
+        """Draw a single state box at its current position."""
         cx, cy = self._positions[i]
         cw, ch = self.CELL_W, self.CELL_H
         x0 = cx - cw // 2
@@ -240,61 +230,6 @@ class GraphPanel(ttk.Frame):
             self.canvas.config(scrollregion=(
                 bbox[0] - 40, bbox[1] - 40, bbox[2] + 40, bbox[3] + 40
             ))
-
-    # ================================================================== #
-    #  Drag-and-drop interaction                                          #
-    # ================================================================== #
-    def _hit_state(self, x, y):
-        """Return the state index under the given canvas coordinates, or None."""
-        for i, (cx, cy) in self._positions.items():
-            hw = self.CELL_W // 2
-            hh = self.CELL_H // 2
-            if cx - hw <= x <= cx + hw and cy - hh <= y <= cy + hh:
-                return i
-        return None
-
-    def _on_press(self, event):
-        """Start dragging if the click is on a state box."""
-        # Convert from widget coords to canvas coords (accounts for scroll)
-        cx = self.canvas.canvasx(event.x)
-        cy = self.canvas.canvasy(event.y)
-        idx = self._hit_state(cx, cy)
-        if idx is not None:
-            self._drag_data = {"idx": idx, "last_x": cx, "last_y": cy}
-            self.canvas.config(cursor="fleur")
-
-    def _on_drag(self, event):
-        """Move the dragged state box and redraw connected arrows."""
-        if self._drag_data is None:
-            return
-
-        cx = self.canvas.canvasx(event.x)
-        cy = self.canvas.canvasy(event.y)
-
-        dx = cx - self._drag_data["last_x"]
-        dy = cy - self._drag_data["last_y"]
-        idx = self._drag_data["idx"]
-
-        # Move all canvas items in this state's tag group
-        tag = f"state_{idx}"
-        self.canvas.move(tag, dx, dy)
-
-        # Update stored position
-        old_cx, old_cy = self._positions[idx]
-        self._positions[idx] = (old_cx + dx, old_cy + dy)
-
-        self._drag_data["last_x"] = cx
-        self._drag_data["last_y"] = cy
-
-        # Redraw all arrows (fast enough for typical grammars)
-        self._draw_all_transitions()
-
-    def _on_release(self, event):
-        """End dragging and update scroll region."""
-        if self._drag_data is not None:
-            self._drag_data = None
-            self.canvas.config(cursor="")
-            self._update_scroll_region()
 
     # ================================================================== #
     #  Parsing table                                                      #
